@@ -4,6 +4,13 @@ namespace CardLibrary.Utils;
 
 public static class CardUtils
 {
+    private static readonly List<int> SpecialCards = new()
+    {
+        (int)SpecialCard.Two,
+        (int)SpecialCard.Reverse,
+        (int)SpecialCard.Skip
+    };
+
     public static string DisplayCard(IEnumerable<Card>? cards)
     {
         return cards == null ? "" : cards.Aggregate("", (current, card) => current + DisplayCard(card));
@@ -34,5 +41,10 @@ public static class CardUtils
             _ => throw new ArgumentOutOfRangeException()
         };
         return unicodeCard + " ";
+    }
+
+    public static bool IsSpecialCard(int cardRank)
+    {
+        return SpecialCards.Any(specialCard => specialCard == cardRank);
     }
 }

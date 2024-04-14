@@ -1,6 +1,6 @@
 namespace CardLibrary.Extension;
 
-public static class CardExtensions
+public static class ShuffleExtensions
 {
     /// <summary>
     /// Shuffle the list in place using the Fisher-Yates method.

@@ -3,50 +3,44 @@ using CardLibrary.Types;
 
 namespace CardLibrary.Manager;
 
-public delegate void DiscardSelectedCard();
-
-public delegate void CheckTakenCardDelegate(Card card);
-
-public delegate void TryFinishTheGameDelegate(Player player);
-
 /// <summary>
 /// Game board logic
 /// </summary>
-public sealed class GameManager
+public class GameManager
 {
-    public Action? OnGamePhaseChangeCallback;
-    public Action<Board>? OnNextTurn;
-    private GamePhase _gamePhase;
+    public Action<string>? OnNotificationCallback;
+    public Action? OnGameFinishedCallback;
+    public Action<Board>? OnNextTurnCallback;
+    public GamePhase GamePhase;
     private readonly Queue<GamePhase> _turnPhases = new();
-    private readonly Deck _deck;
+    public readonly Deck Deck;
     private readonly Hand[] _playersHands;
-    private readonly DiscardPile _discardPile;
+    public readonly DiscardPile DiscardPile = new();
     private int _indexOfCurrentPlayer = -1;
     private int _playerTurnDirection = 1;
     private int _penaltyCardsToTake;
     private List<Player> _playerList = new();
     private readonly GameData _gameData;
     private Action? _botAction;
-    private readonly TurnTimer _turnTimer;
+    private int _turnCount;
     private Player? CurrentPlayer { get; set; }
 
 
-    public GameManager(GameData gameData, TurnTimer turnTimer)
+    public GameManager(GameData gameData)
     {
         _gameData = gameData;
-        _discardPile = new DiscardPile();
-        _deck = new Deck(_discardPile);
-        _turnTimer = turnTimer;
+        Deck = new Deck(DiscardPile, MatchConstants.TestDeck);
         _playersHands = new Hand[_gameData.Players.Length];
 
-        _turnTimer.OnTimerFinishedCb = PerformAction;
-        _deck.OnCardDealtCallback += StartGame;
-        _discardPile.OnCardPutOnDiscardPile += CheckForCardSpecialPower;
+        //callbacks
+        Deck.OnCardDealtCallback += StartGame;
+        DiscardPile.OnCardPutOnDiscardPile += CheckForCardSpecialPower;
     }
+
 
     private void CheckForCardSpecialPower(Card card, Card? prevCard)
     {
-        if (!IsValidTimeToCheckCardSpecialPower()) return;
+        if (!IsValidTimeToCheckCardSpecialPower() && _turnCount != 0) return;
         switch (card.Rank)
         {
             case (int)SpecialCard.Reverse:
@@ -64,6 +58,7 @@ public sealed class GameManager
         }
     }
 
+
     private void AddPenaltyCards(int penaltyCards)
     {
         _penaltyCardsToTake += penaltyCards;
@@ -71,6 +66,7 @@ public sealed class GameManager
 
     private void ReversePlayersOrder()
     {
+        OnNotificationCallback?.Invoke("Reverse turn for next player");
         _playerTurnDirection = -_playerTurnDirection;
     }
 
@@ -78,6 +74,7 @@ public sealed class GameManager
     private void SkipNextPlayer()
     {
         IncreasePlayerIndex();
+        OnNotificationCallback?.Invoke($"Skip turn for {CurrentPlayer?.Name} ");
     }
 
     private bool IsOnlyTwoPlayersGame()
@@ -87,9 +84,8 @@ public sealed class GameManager
 
     private bool IsValidTimeToCheckCardSpecialPower()
     {
-        return _gamePhase is GamePhase.TakeOrDiscard or GamePhase.PassOrDiscard
-                   or GamePhase.PassOrDiscardNextSequencedCard or GamePhase.OverbidOrTakePenalties &&
-               CurrentPlayer?.TimeIsOver() == false;
+        return GamePhase is GamePhase.TakeOrDiscard or GamePhase.PassOrDiscard
+            or GamePhase.PassOrDiscardNextSequencedCard or GamePhase.OverbidOrTakePenalties;
     }
 
     private void StartGame()
@@ -109,20 +105,21 @@ public sealed class GameManager
 
     private void StartNextPhase()
     {
-        if (_gamePhase == GamePhase.GameEnded)
+        if (GamePhase == GamePhase.GameEnded)
             return;
 
         if (_turnPhases.Count > 0)
         {
-            OnNextTurn?.Invoke(new Board
+            _turnCount++;
+            OnNextTurnCallback?.Invoke(new Board
             {
                 UserId = CurrentPlayer?.UserId,
                 Hand = CurrentPlayer?.MyHand.GetCardsFromZone(),
-                GameCard = _discardPile.GetTopCardFromDiscardPile()
+                GameCard = DiscardPile.GetTopCardFromDiscardPile()
             });
             //there are moves so output.
             CurrentPlayer?.ResetTimer();
-            _gamePhase = _turnPhases.Dequeue();
+            GamePhase = _turnPhases.Dequeue();
             CheckIfNextPlayerIsBot();
             CheckIfNextPlayerIsForcedToTakeCards();
         }
@@ -135,20 +132,24 @@ public sealed class GameManager
     private void CheckIfNextPlayerIsForcedToTakeCards()
     {
         if (IsValidGamePhase(GamePhase.OverbidOrTakePenalties) && CurrentPlayer?.HasCardsToDefend() == false)
+        {
             TakePenaltyCards();
+        }
     }
 
     private bool IsValidGamePhase(GamePhase gPhase)
     {
-        return _gamePhase == gPhase && IsThisGamePlayerAndTimeIsNotOver();
+        return GamePhase == gPhase && IsThisGamePlayerAndTimeIsNotOver();
     }
 
     private void TakePenaltyCards()
     {
         CurrentPlayer?.TakePenaltyCards(_penaltyCardsToTake);
-        Console.WriteLine("Take " + _penaltyCardsToTake + " cards!");
+        OnNotificationCallback?.Invoke($"{CurrentPlayer?.Name} Take {_penaltyCardsToTake} cards!");
         _penaltyCardsToTake = 0;
+        StartNextPhase();
     }
+
 
     private bool IsThisGamePlayerAndTimeIsNotOver()
     {
@@ -164,7 +165,7 @@ public sealed class GameManager
     {
         if (CurrentPlayer?.TimeIsOver() == true)
         {
-            PerformAction();
+            CurrentPlayer?.PerformAction();
         }
         else if (CurrentPlayer is AiPlayer bot)
         {
@@ -173,17 +174,11 @@ public sealed class GameManager
         }
     }
 
-    private void PerformAction()
-    {
-        if (CurrentPlayer is not { InAction: false }) return;
-        var action = GetCurrentTurnTimerPassedProperAction(CurrentPlayer);
-        action?.Invoke();
-    }
 
-    private Action? GetCurrentTurnTimerPassedProperAction(Player player)
+    public Action? GetCurrentTurnTimerPassedProperAction(Player player)
     {
         Action? action = null;
-        switch (_gamePhase)
+        switch (GamePhase)
         {
             case GamePhase.TakeOrDiscard:
                 action = player.TakeCard;
@@ -221,25 +216,25 @@ public sealed class GameManager
 
     private bool IsRoundEnded()
     {
-        return _gamePhase == GamePhase.RoundEnded;
+        return GamePhase == GamePhase.RoundEnded;
     }
 
 
     private bool IsGameEnded()
     {
-        return _gamePhase == GamePhase.GameEnded;
+        return GamePhase == GamePhase.GameEnded;
     }
 
     private bool IsGameDealingCards()
     {
-        return _gamePhase == GamePhase.CardsDealing;
+        return GamePhase == GamePhase.CardsDealing;
     }
 
 
     private Action? GetCurrentTurnProperAction(Player player)
     {
         Action? action = null;
-        switch (_gamePhase)
+        switch (GamePhase)
         {
             case GamePhase.TakeOrDiscard:
                 action = player.Discard;
@@ -265,7 +260,7 @@ public sealed class GameManager
 
     private void DiscardOrTakePenaltyCards()
     {
-        if (CurrentPlayer?.HasCardsToDefend() == true)
+        if (CurrentPlayer?.HasCardsToDefend() == true && CurrentPlayer.TimeIsOver() == false)
             CurrentPlayer?.Discard();
         else
             TakePenaltyCards();
@@ -273,7 +268,7 @@ public sealed class GameManager
 
     private void ShowTurnDesc()
     {
-        Console.WriteLine($"{CurrentPlayer?.Name} turn.");
+        OnNotificationCallback?.Invoke($"{CurrentPlayer?.Name} turn.");
     }
 
     private void AssignNewPlayer()
@@ -290,18 +285,24 @@ public sealed class GameManager
             _indexOfCurrentPlayer += _playerList.Count;
     }
 
-    ~GameManager()
-    {
-        _deck.OnCardDealtCallback -= StartGame;
-    }
-
     public void StartNewGame()
     {
-        _gamePhase = GamePhase.CardsDealing;
+        if (!IsGameEnded())
+        {
+            CloseThisGame();
+        }
 
-        _deck.ResetState();
+        GamePhase = GamePhase.CardsDealing;
+        ResetPlayers();
         InitPlayers();
         StartNewMatch();
+    }
+
+    private void ResetPlayers()
+    {
+        _penaltyCardsToTake = 0;
+        _indexOfCurrentPlayer = -1;
+        _playerTurnDirection = 1;
     }
 
 
@@ -311,13 +312,17 @@ public sealed class GameManager
         {
             var playerData = _gameData.Players[index];
             var player = playerData.IsBot
-                ? new AiPlayer(_deck, _discardPile, CheckTakenCard, DiscardSelected, _turnTimer)
-                : new Player(_deck, _discardPile, CheckTakenCard, DiscardSelected, _turnTimer);
+                ? new AiPlayer(this)
+                : new Player(this);
+
+
             player.OnFinishMoveCb += StartNextPhase;
             player.Name = playerData.Name;
             player.TurnOrder = playerData.TurnOrder;
             player.UserId = playerData.Id;
-            _playersHands[index] = new Hand(_discardPile, TryFinishTheGame)
+
+
+            _playersHands[index] = new Hand(this)
             {
                 PlayerOfThisHand = player
             };
@@ -327,18 +332,29 @@ public sealed class GameManager
         SetupPlayersOrder();
     }
 
-    private void TryFinishTheGame(Player winner)
+    public void TryFinishTheGame(Player? winner)
     {
-        if (IsProperPhaseToPerformGameMove() && IsThisPlayerTurn(winner))
-        {
-            CloseThisGame();
-        }
+        if (winner == null) return;
+        if (!IsProperPhaseToPerformGameMove() || !IsThisPlayerTurn(winner)) return;
+        CloseThisGame();
+        ShowEndGameWindow(winner);
+    }
+
+    protected virtual void ShowEndGameWindow(Player winner)
+    {
+        var score = _playerList.Where(t => t != winner).Sum(t => t.GetScore());
+        OnNotificationCallback?.Invoke("The winner is: " + winner.Name + "\n\nTotal score: " + score);
     }
 
     private void CloseThisGame()
     {
-        _turnTimer.StopTimer();
-        _gamePhase = GamePhase.GameEnded;
+        foreach (var player in _playerList)
+        {
+            player.StopTimer();
+        }
+
+        GamePhase = GamePhase.GameEnded;
+        OnGameFinishedCallback?.Invoke();
     }
 
 
@@ -353,39 +369,6 @@ public sealed class GameManager
         _playerList = _playerList.OrderBy(p => p.TurnOrder).ToList();
     }
 
-    private void DiscardSelected()
-    {
-        switch (_gamePhase)
-        {
-            case GamePhase.TakeOrDiscard:
-                Console.WriteLine("Can't discard any card so I take one");
-                CurrentPlayer?.TakeCard();
-                break;
-            case GamePhase.PassOrDiscard:
-                Console.WriteLine("Can't discard any card so I pass");
-                CurrentPlayer?.Pass();
-                break;
-            case GamePhase.CardsDealing:
-            case GamePhase.PassOrDiscardNextSequencedCard:
-            case GamePhase.OverbidOrTakePenalties:
-            case GamePhase.RoundEnded:
-            case GamePhase.GameEnded:
-            default:
-                break;
-        }
-    }
-
-    private void CheckTakenCard(Card card)
-    {
-        if (_gamePhase == GamePhase.TakeOrDiscard && CurrentPlayer?.TimeIsOver() == false &&
-            _discardPile.CheckIfCardCanBePutOnDiscardPile(card))
-            AddNewMoveToQueue(GamePhase.PassOrDiscard);
-    }
-
-    private void AddNewMoveToQueue(GamePhase gamePhase)
-    {
-        _turnPhases.Enqueue(gamePhase);
-    }
 
     private Hand[] CreateHandDealOrder()
     {
@@ -397,8 +380,9 @@ public sealed class GameManager
     {
         RecreatePhasesQueue();
         var dealOrder = CreateHandDealOrder();
-        _deck.DealCards(dealOrder);
+        Deck.DealCards(dealOrder);
     }
+
 
     private void RecreatePhasesQueue()
     {

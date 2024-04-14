@@ -1,5 +1,6 @@
 using CardLibrary.Manager;
 using CardLibrary.Types;
+using CardLibrary.Utils;
 
 namespace CardLibrary.AI;
 
@@ -14,24 +15,41 @@ public sealed class AiPlayer : Player
 
     private Card? AnalyzeHandAndDiscardPile(List<Card> cards)
     {
-        var topCard = Manager.DiscardPile.GetTopCardFromDiscardPile();
-        // Initialize variables to store potential playable cards and score
-        var playableCards = new List<Card>();
-        var cardScores = new Dictionary<Card, int>();
-
-        // Debug.Log($"AI Cards {Hand.ToJson()}");
-        // Analyze hand cards
-        foreach (var card in cards)
+        try
         {
-            var score = CalculateCardScore(card, topCard);
-            if (score <= 0) continue;
-            playableCards.Add(card);
-            cardScores.Add(card, score);
+            if (cards.Count == 0)
+            {
+                return null;
+            }
+
+            var topCard = Manager.DiscardPile.GetTopCardFromDiscardPile();
+            // Initialize variables to store potential playable cards and score
+            var playableCards = new List<Card>();
+            var cardScores = new Dictionary<Card, int>();
+
+            // Debug.Log($"AI Cards {Hand.ToJson()}");
+            // Analyze hand cards
+            foreach (var card in cards)
+            {
+                var score = CalculateCardScore(card, topCard);
+                if (score <= 0) continue;
+                playableCards.Add(card);
+                cardScores.Add(card, score);
+            }
+
+            // Choose the card with the highest score based on your AI strategy
+            // when null , No playable cards found
+            if (topCard != null)
+                return playableCards.Count > 0
+                    ? ChooseBestCard(playableCards, cardScores, topCard)
+                    : null;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"{ex.Message} and {CardUtils.DisplayCard(cards)}");
         }
 
-        // Choose the card with the highest score based on your AI strategy
-        // when null , No playable cards found
-        return playableCards.Count > 0 && topCard != null ? ChooseBestCard(playableCards, cardScores, topCard) : null;
+        return null;
     }
 
 

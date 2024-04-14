@@ -2,48 +2,57 @@ namespace CardLibrary.Types;
 
 public sealed class DiscardPile : DropZone
 {
-    public Action<Card, Card?> OnCardPutOnDiscardPile;
+    public Action? OnDiscardPileDrop;
+    public Action<Card, Card?>? OnCardPutOnDiscardPile;
 
-    public void DealCard(Card? card)
+    public void DropCard(Card? card)
     {
         var prevCard = GetTopCardFromDiscardPile();
         if (card == null) return;
         GetCardsFromZone().Add(card);
-        OnCardPutOnDiscardPile(card, prevCard);
+        OnCardPutOnDiscardPile?.Invoke(card, prevCard);
     }
 
     public Card? GetTopCardFromDiscardPile()
     {
         var cards = GetCardsFromZone();
-        return cards.Count > 0 ? cards[^1] : null;
+        return cards.Count > 0 ? cards.Last() : null;
     }
 
     public bool CheckIfCardCanBePutOnDiscardPile(Card card)
     {
         var topDeckCard = GetTopCardFromDiscardPile();
         if (topDeckCard != null) return card.Rank == topDeckCard.Rank || card.Suit == topDeckCard.Suit;
+        Console.WriteLine("CheckIfCardCanBePutOnDiscardPile -- Card is null!");
         return false;
     }
 
     public void OnDrop(Card card)
     {
         var prevCard = GetTopCardFromDiscardPile();
-        //code to send on the server
         Cards.Add(card);
-        OnCardPutOnDiscardPile(card, prevCard);
+        OnCardPutOnDiscardPile?.Invoke(card, prevCard);
+        OnDiscardPileDrop?.Invoke();
     }
 
     public bool CheckIfCardCardCanRescueFromPenalty(Card c)
     {
         var topDeckCard = GetTopCardFromDiscardPile();
-        if (topDeckCard != null)
-            return c.Rank switch
-            {
-                (int)SpecialCard.Reverse or (int)SpecialCard.Two or (int)SpecialCard.Skip => true,
-                _ => false
-            };
-        Console.WriteLine("CheckIfCardCanBePutOnDiscardPile -- Card is null!");
-        return false;
+        if (topDeckCard == null)
+        {
+            Console.WriteLine("CheckIfCardCanBePutOnDiscardPile -- Card is null!");
+            return false;
+        }
+
+        switch (topDeckCard.Rank)
+        {
+            case (int)SpecialCard.Two when c.Rank == (int)SpecialCard.Two:
+            case (int)SpecialCard.Reverse when c.Rank == (int)SpecialCard.Reverse:
+            case (int)SpecialCard.Skip when c.Rank == (int)SpecialCard.Skip:
+                return true;
+            default:
+                return false;
+        }
     }
 
     public bool IsNextSequencedCard(Card card, Player playerOfThisHand)

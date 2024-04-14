@@ -2,7 +2,7 @@ using CardLibrary.Manager;
 
 namespace CardLibrary.Types;
 
-public class PlayerV0
+public class Player
 {
     public string UserId { get; set; }
     public Action? OnFinishMoveCb;
@@ -13,7 +13,7 @@ public class PlayerV0
     protected readonly GameManager Manager;
     private readonly TurnTimer _turnTimer = new();
 
-    public PlayerV0(GameManager gameManager)
+    public Player(GameManager gameManager)
     {
         Manager = gameManager;
         _turnTimer.OnTimerFinishedCb = PerformAction;
@@ -44,14 +44,6 @@ public class PlayerV0
     }
 
 
-    // private void CheckTakenCard()
-    // {
-    //     if (CardOnAction != null)
-    //     {
-    //         Manager.CheckTakenCard(CardOnAction);
-    //     }
-    // }
-
     private void FinishMove()
     {
         _inAction = false;
@@ -71,8 +63,10 @@ public class PlayerV0
     private void TakeCard(ITakeCard cardPile)
     {
         CardOnAction = cardPile.TakeCard(MyHand);
-        // CheckTakenCard();
-        FinishMove();
+        if (CardOnAction != null)
+        {
+            FinishMove();
+        }
     }
 
     public virtual void Discard()
@@ -96,10 +90,9 @@ public class PlayerV0
     {
         if (CardOnAction != null)
         {
-            Manager.DiscardPile.OnDrop(CardOnAction);
             MyHand.Cards.Remove(CardOnAction);
+            Manager.DiscardPile.OnDrop(CardOnAction);
             FinishMove();
-            MyHand.OnCardDiscard();
         }
         else
         {
@@ -113,9 +106,11 @@ public class PlayerV0
                     Console.WriteLine("Can't discard any card so I pass");
                     Pass();
                     break;
+                case GamePhase.OverbidOrTakePenalties:
+                    Console.WriteLine("OverbidOrTakePenalties on AI Discard");
+                    break;
                 case GamePhase.CardsDealing:
                 case GamePhase.PassOrDiscardNextSequencedCard:
-                case GamePhase.OverbidOrTakePenalties:
                 case GamePhase.RoundEnded:
                 case GamePhase.GameEnded:
                 default:
@@ -165,7 +160,18 @@ public class PlayerV0
 
     public void PerformAction()
     {
+        if (_inAction) return;
         var action = Manager.GetCurrentTurnTimerPassedProperAction(this);
         action?.Invoke();
+    }
+
+    public void TakePenaltyCards(int penaltyCardsToTake)
+    {
+        for (var i = 0; i < penaltyCardsToTake; i++)
+        {
+            CardOnAction = Manager.Deck.TakeCard(MyHand);
+        }
+
+        _inAction = false;
     }
 }

@@ -2,5 +2,5 @@ namespace CardLibrary.Types;
 
 public interface ITakeCard
 {
-    Card TakeCard(Hand hand);
+    Card? TakeCard(Hand hand);
 }

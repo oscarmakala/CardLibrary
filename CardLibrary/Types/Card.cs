@@ -44,15 +44,13 @@ public class Card
     }
 
 
-    // public override bool Equals(object other)
-    // {
-    //     if (other == null) return false;
-    //     return Suit == other.Suit && Rank == other.Rank;
-    // }
-
-
     public override string ToString()
     {
         return $"{Rank} of {Suit.ToString()}";
+    }
+
+    public int GetCardPointsValue()
+    {
+        return Rank;
     }
 }

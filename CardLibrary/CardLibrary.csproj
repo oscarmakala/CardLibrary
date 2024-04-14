@@ -4,10 +4,43 @@
         <TargetFramework>net7.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
+        <Description>Card game logic made with C# dotnet 7 and by oscarmakala</Description>
+        <Title>QuanaCard</Title>
+        <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     </PropertyGroup>
 
     <ItemGroup>
-      <Folder Include="Manager\EndGameTypes\" />
+        <None Include="..\.editorconfig" Link=".editorconfig"/>
+        <None Include="..\LICENSE.md">
+            <Pack>True</Pack>
+            <PackagePath>\</PackagePath>
+        </None>
     </ItemGroup>
+
+    <ItemGroup>
+        <None Update="README_NUGET.md">
+            <Pack>True</Pack>
+            <PackagePath>\</PackagePath>
+        </None>
+    </ItemGroup>
+    <PropertyGroup>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+        <DebugType>embedded</DebugType>
+        <OutputType>Library</OutputType>
+        <RootNamespace>CardLibrary</RootNamespace>
+        <Authors>Oscar Makala</Authors>
+        <Copyright>Copyright (c) 2024 oscarmakala</Copyright>
+        <PackageProjectUrl/>
+        <PackageReadmeFile>README_NUGET.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/oscarmakala/CardLibrary</RepositoryUrl>
+        <PackageTags>card;lastcard;card-engine</PackageTags>
+        <PackageReleaseNotes>Bug fix, some minor changes in the method signatures</PackageReleaseNotes>
+        <PackageIcon/>
+        <PackageId>Quana.Card</PackageId>
+        <PackageLicenseFile>LICENSE.md</PackageLicenseFile>
+        <RepositoryType>git</RepositoryType>
+        <Version>0.0.1</Version>
+    </PropertyGroup>
+
 
 </Project>

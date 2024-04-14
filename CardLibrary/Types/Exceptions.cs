@@ -1,6 +1,5 @@
 namespace CardLibrary.Types;
 
-public class Exceptions
+public class GameException : Exception
 {
-    
 }

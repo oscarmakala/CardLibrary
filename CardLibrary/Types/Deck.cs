@@ -1,13 +1,32 @@
+using CardLibrary.Converstion;
+using CardLibrary.Data;
+using CardLibrary.Extension;
+
 namespace CardLibrary.Types;
 
 public class Deck : DropZone, ITakeCard
 {
-    private readonly DiscardPile _discardPile;
+    private readonly DiscardPile? _discardPile;
     public Action? OnCardDealtCallback;
 
-    public Deck(DiscardPile discardPile)
+
+    public Deck()
+    {
+    }
+
+    public Deck(DiscardPile discardPile, string? notation = null)
     {
         _discardPile = discardPile;
+        if (notation != null)
+        {
+            var d = DeckString.LoadFromString(notation);
+            Cards.AddRange(d.Cards);
+        }
+        else
+        {
+            CreateStack(1);
+            Shuffle();
+        }
     }
 
     private void CreateStack(int lowest)
@@ -41,41 +60,24 @@ public class Deck : DropZone, ITakeCard
         }
     }
 
-    private Card? TopCard()
+    private Card TopCard()
     {
-        return Cards.Count > 0 ? Cards[^1] : null;
+        if (Cards.Count == 0)
+        {
+            CheckIfDeckIsEmpty();
+        }
+
+        return Cards.Last();
     }
 
 
-    public void Deal(int nbCards, ICollection<Card> cards)
+    private Card DrawCard()
     {
-        for (var i = 0; i < nbCards; i++)
-        {
-            var card = DrawCard();
-            if (card != null) cards.Add(card);
-        }
-    }
-
-    private Card? DrawCard()
-    {
-        if (Cards.Count <= 0)
-        {
-            Refill();
-        }
-
         var card = TopCard();
         RemoveCard(card);
         return card;
     }
 
-    private void Refill()
-    {
-        foreach (var discardPileCard in _discardPile.Cards.ToList())
-        {
-            Cards.Add(discardPileCard);
-            _discardPile.Cards.Remove(discardPileCard);
-        }
-    }
 
     private void RemoveCard(Card? card)
     {
@@ -89,10 +91,19 @@ public class Deck : DropZone, ITakeCard
         }
     }
 
-    public void ResetState()
+
+    public void DealCards(PlayerData[] players, int numberOfCards)
     {
-        CreateStack(1);
-        Shuffle();
+        for (var i = 0; i < numberOfCards; i++)
+        {
+            foreach (var player in players)
+            {
+                var card = DrawCard();
+                player.CardsInHand.Add(card);
+            }
+        }
+
+        PutLastCardToDiscardPile();
     }
 
     public void DealCards(Hand[] hands)
@@ -102,27 +113,56 @@ public class Deck : DropZone, ITakeCard
             foreach (var hand in hands)
             {
                 var card = DrawCard();
-                if (card != null) hand.AddCard(card);
+                hand.AddCard(card);
             }
         }
-
         PutLastCardToDiscardPile();
         OnCardDealtCallback?.Invoke();
+        
     }
 
     private void PutLastCardToDiscardPile()
     {
-        _discardPile.DealCard(DrawCard());
+        _discardPile?.DropCard(DrawCard());
     }
 
     public Card TakeCard(Hand hand)
     {
         var card = DrawCard();
-        if (card != null)
+        hand.AddCard(card);
+        return card;
+    }
+
+    private void CheckIfDeckIsEmpty()
+    {
+        var remainingOnDeckCards = GetRemainingCardsNumber();
+        if (remainingOnDeckCards == 0)
         {
-            hand.AddCard(card);
+            ReturnDiscardedCardsToDeck();
+        }
+    }
+
+    private void ReturnDiscardedCardsToDeck()
+    {
+        var cards = _discardPile!.GetCardsFromZone();
+        // Setting the last card aside to ensure it's not shuffled back to the deck 
+        var lastCard = cards.Last();
+        cards.Remove(lastCard);
+        cards.Shuffle();
+
+        // Add shuffled cards back to the deck
+        Cards.AddRange(cards);
+        foreach (var card in cards.ToList())
+        {
+            _discardPile.Cards.Remove(card);
         }
 
-        return card;
+        // Adding the last card back to the discard pile
+        _discardPile.Cards.Add(lastCard);
+    }
+
+    private int GetRemainingCardsNumber()
+    {
+        return Cards.Count;
     }
 }

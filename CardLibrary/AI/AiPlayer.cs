@@ -1,4 +1,3 @@
-
 using CardLibrary.Manager;
 using CardLibrary.Types;
 
@@ -6,8 +5,6 @@ namespace CardLibrary.AI;
 
 public sealed class AiPlayer : Player
 {
-   
-
     public override void Discard()
     {
         var cards = GetChooseCardRule()();
@@ -17,7 +14,7 @@ public sealed class AiPlayer : Player
 
     private Card? AnalyzeHandAndDiscardPile(List<Card> cards)
     {
-        var topCard = DiscardPile.GetTopCardFromDiscardPile();
+        var topCard = Manager.DiscardPile.GetTopCardFromDiscardPile();
         // Initialize variables to store potential playable cards and score
         var playableCards = new List<Card>();
         var cardScores = new Dictionary<Card, int>();
@@ -139,7 +136,8 @@ public sealed class AiPlayer : Player
         return bestCard;
     }
 
-    public AiPlayer(Deck deck, DiscardPile discardPile, CheckTakenCardDelegate checkTakenCardDelegate, DiscardSelectedCard discardSelectedCard, TurnTimer turnTimer) : base(deck, discardPile, checkTakenCardDelegate, discardSelectedCard, turnTimer)
+
+    public AiPlayer(GameManager gameManager) : base(gameManager)
     {
     }
 }

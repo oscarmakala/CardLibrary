@@ -33,7 +33,7 @@ public abstract class MonoBehaviour
             
             Update(deltaTime);
             // Sleep to approximate frame rate
-            var waitTime = (int)(1000f / 120f - deltaTime * 1000);
+            var waitTime = (int)(1000f / 200f - deltaTime * 1000);
             // If the frame was processed faster than the target frame time, wait for the remaining time
             if (waitTime > 0)
             {

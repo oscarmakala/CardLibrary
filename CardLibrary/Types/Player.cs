@@ -2,45 +2,33 @@ using CardLibrary.Manager;
 
 namespace CardLibrary.Types;
 
-public class Player
+public class PlayerV0
 {
     public string UserId { get; set; }
-    private readonly CheckTakenCardDelegate _checkTakenCardDelegate;
-    private readonly DiscardSelectedCard _discardSelectedCard;
-    public Action OnFinishMoveCb;
+    public Action? OnFinishMoveCb;
     public Hand MyHand;
     public string Name;
     private Card? _cardOnAction;
-    public bool InAction;
-    private readonly Deck _deck;
-    protected readonly DiscardPile DiscardPile;
-    private readonly TurnTimer _turnTimer;
-    public int TurnOrder { get; set; }
+    private bool _inAction;
+    protected readonly GameManager Manager;
+    private readonly TurnTimer _turnTimer = new();
 
-    public Card? CardOnAction
+    public PlayerV0(GameManager gameManager)
     {
-        get => _cardOnAction;
-        protected set
-        {
-            _cardOnAction = value;
-            InAction = true;
-        }
+        Manager = gameManager;
+        _turnTimer.OnTimerFinishedCb = PerformAction;
     }
 
-    
+    public int TurnOrder { get; set; }
 
-    public Player(Deck deck,
-        DiscardPile discardPile,
-        CheckTakenCardDelegate checkTakenCardDelegate,
-        DiscardSelectedCard discardSelectedCard,
-        TurnTimer turnTimer)
+    protected Card? CardOnAction
     {
-        _deck = deck;
-        _turnTimer = turnTimer;
-        DiscardPile = discardPile;
-        _checkTakenCardDelegate = checkTakenCardDelegate;
-        _discardSelectedCard = discardSelectedCard;
-        
+        get => _cardOnAction;
+        set
+        {
+            _cardOnAction = value;
+            _inAction = true;
+        }
     }
 
 
@@ -55,26 +43,19 @@ public class Player
         return cards.Count != 0;
     }
 
-    public void TakePenaltyCards(int penaltyCardsToTake)
-    {
-        for (var i = 0; i < penaltyCardsToTake; i++)
-        {
-            if (i == penaltyCardsToTake - 1)
-            {
-                CardOnAction = _deck.TakeCard(MyHand);
-                if (CardOnAction == null) continue;
-                _checkTakenCardDelegate(CardOnAction);
-                FinishMove();
-            }
-            else
-                _deck.TakeCard(MyHand);
-        }
-    }
+
+    // private void CheckTakenCard()
+    // {
+    //     if (CardOnAction != null)
+    //     {
+    //         Manager.CheckTakenCard(CardOnAction);
+    //     }
+    // }
 
     private void FinishMove()
     {
-        InAction = false;
-        OnFinishMoveCb();
+        _inAction = false;
+        OnFinishMoveCb?.Invoke();
     }
 
     public void TakeCard()
@@ -90,6 +71,7 @@ public class Player
     private void TakeCard(ITakeCard cardPile)
     {
         CardOnAction = cardPile.TakeCard(MyHand);
+        // CheckTakenCard();
         FinishMove();
     }
 
@@ -105,6 +87,8 @@ public class Player
 
     protected Func<List<Card>> GetChooseCardRule()
     {
+        if (Manager.GamePhase == GamePhase.OverbidOrTakePenalties)
+            return MyHand.GetAvailableToDefendCards;
         return MyHand.GetAvailableCardsFromZone;
     }
 
@@ -112,16 +96,34 @@ public class Player
     {
         if (CardOnAction != null)
         {
-            DiscardPile.OnDrop(CardOnAction);
-            MyHand.OnCardDiscard();
+            Manager.DiscardPile.OnDrop(CardOnAction);
+            MyHand.Cards.Remove(CardOnAction);
             FinishMove();
             MyHand.OnCardDiscard();
         }
         else
         {
-            _discardSelectedCard();
+            switch (Manager.GamePhase)
+            {
+                case GamePhase.TakeOrDiscard:
+                    Console.WriteLine("Can't discard any card so I take one");
+                    TakeCard();
+                    break;
+                case GamePhase.PassOrDiscard:
+                    Console.WriteLine("Can't discard any card so I pass");
+                    Pass();
+                    break;
+                case GamePhase.CardsDealing:
+                case GamePhase.PassOrDiscardNextSequencedCard:
+                case GamePhase.OverbidOrTakePenalties:
+                case GamePhase.RoundEnded:
+                case GamePhase.GameEnded:
+                default:
+                    break;
+            }
         }
     }
+
 
     public void StartTimer()
     {
@@ -141,11 +143,29 @@ public class Player
 
     private ITakeCard GetPile()
     {
-        return _deck;
+        return Manager.Deck;
     }
 
     public bool TimeIsOver()
     {
         return _turnTimer.TimeIsOver();
+    }
+
+    public bool HasAnotherCardToPutInto()
+    {
+        var cards = MyHand.GetAvailableCardsFromZone();
+        return cards.Count != 0;
+    }
+
+    public int GetScore()
+    {
+        var cards = MyHand.GetCardsFromZone();
+        return cards.Sum(t => t.GetCardPointsValue());
+    }
+
+    public void PerformAction()
+    {
+        var action = Manager.GetCurrentTurnTimerPassedProperAction(this);
+        action?.Invoke();
     }
 }
